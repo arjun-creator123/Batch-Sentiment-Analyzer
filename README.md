@@ -34,7 +34,7 @@ A modern, high-performance web application designed to transform unstructured so
 
 ## 📖 Usage Instructions
 1. **Prepare Data:** Ensure your CSV has at least one column containing the text you wish to analyze.
-2. **Upload:** Click the "Upload CSV" area and select your file.
+2. **Upload:** Click the "Upload CSV" area and select your file.(You can use your own file as well).
 3. **Analyze:** Click **"Analyze Full Dataset"**.
    * *Note: If running locally without a key, the app defaults to "Mock Mode" to demonstrate functionality.*
 4. **Monitor:** Watch the progress bar and real-time chart updates as the AI processes your data.
