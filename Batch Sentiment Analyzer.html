@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligence - Batch Sentiment Analyzer</title>
+    <!-- Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Chart.js for graphing --><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e; /* Dark background matching inspiration */
+            color: #e0e0e0; /* Lighter text for dark theme */
+        }
+        /* Custom scrollbar for dark modern feel */
+        #results-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        #results-list::-webkit-scrollbar-track {
+            background: #2b2b40; /* Darker track */
+            border-radius: 10px;
+        }
+        #results-list::-webkit-scrollbar-thumb {
+            background: #6a0dad; /* Purple thumb */
+            border-radius: 10px;
+            border: 2px solid #2b2b40;
+        }
+        #results-list::-webkit-scrollbar-thumb:hover {
+            background: #8e2de2; /* Lighter purple on hover */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-start py-12 px-4">
+
+    <div class="w-full max-w-6xl bg-gray-900 shadow-2xl rounded-3xl p-8 md:p-12 border border-gray-700 grid grid-cols-1 lg:grid-cols-5 gap-10">
+        
+        <!-- Main Content (2/3 width) --><div class="lg:col-span-3">
+            <h1 class="text-4xl lg:text-5xl font-extrabold text-white mb-3 leading-tight">
+                Batch Sentiment <span class="text-indigo-500">Analyzer</span>
+            </h1>
+            <p class="text-gray-400 text-lg mb-8">
+                Upload a CSV file of social media posts to analyze sentiment and visualize trends with AI.
+            </p>
+
+            <!-- File Input Area --><div class="mb-8 bg-gray-800 p-7 rounded-2xl shadow-xl border border-gray-700">
+                <label for="csv-file-input" class="block text-base font-semibold text-gray-300 mb-3">1. Upload Your CSV Dataset (single column of text):</label>
+                <input type="file" id="csv-file-input" accept=".csv"
+                    class="block w-full text-base text-gray-300 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-base file:font-semibold file:bg-indigo-700 file:text-white hover:file:bg-indigo-600 transition-colors duration-200 ease-in-out mb-5 disabled:opacity-50 disabled:cursor-not-allowed">
+                
+                <p id="file-status" class="text-sm text-gray-400 mb-4 hidden"></p>
+
+                <button id="analyze-button" onclick="startBatchAnalysis()" disabled
+                    class="w-full flex items-center justify-center px-6 py-3 text-lg font-bold rounded-xl shadow-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500/50 transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span id="button-text">Analyze Full Dataset</span>
+                    <svg id="loading-spinner" class="animate-spin -ml-1 mr-3 h-6 w-6 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Analysis Progress --><div id="progress-container" class="mb-8 hidden bg-gray-800 p-7 rounded-2xl shadow-inner border border-gray-700">
+                <h2 class="text-2xl font-bold text-gray-200 mb-4">Analysis Progress</h2>
+                <p id="progress-status" class="text-gray-400 text-base mb-3">Starting...</p>
+                <div class="w-full bg-gray-700 rounded-full h-3.5">
+                    <div id="progress-bar" class="bg-gradient-to-r from-indigo-500 to-purple-600 h-3.5 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+                </div>
+                <p id="error-message" class="text-red-400 mt-3 text-sm hidden"></p>
+            </div>
+
+            <!-- Analysis History / Data List --><h2 class="text-2xl font-bold text-gray-200 mb-4">Analyzed Tweets (<span id="total-count">0</span> Total)</h2>
+            <div id="results-list" class="space-y-4 max-h-96 overflow-y-auto pr-3">
+                <p id="empty-state" class="text-gray-500 italic text-base">Upload a dataset to begin the analysis and see results here.</p>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Chart (1/3 width) --><div class="lg:col-span-2 bg-gradient-to-br from-gray-800 to-gray-800 p-8 rounded-2xl shadow-xl border border-gray-700 flex flex-col justify-between">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-200 mb-6 text-center">Sentiment Distribution</h2>
+                <div class="flex justify-center items-center">
+                     <canvas id="sentimentChart"></canvas>
+                </div>
+            </div>
+            
+            <button onclick="exportData()" id="export-button" disabled
+                class="mt-8 w-full flex items-center justify-center px-6 py-3 text-lg font-bold rounded-xl shadow-lg text-indigo-200 bg-gray-700 hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-600 transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 mr-3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Export Final Results (CSV)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Globals and Configuration ---
+        const apiKey = ""; // API Key is required for live analysis. Leave empty if running in Canvas environment.
+        const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+        
+        // --- Function Pointer for Analysis ---
+        // To run locally without an API Key, use fetchMockSentiment. 
+        // To run live (if you have an API key or are in the Canvas), use fetchSentiment.
+        const analysisFunction = fetchMockSentiment; // <<< CURRENTLY SET TO MOCK
+        
+        let sentimentData = [];
+        let sentimentChartInstance = null;
+        let unanalyzedTweets = []; // Array to hold tweets parsed from the file
+        
+        // --- DOM Elements ---
+        const fileInput = document.getElementById('csv-file-input');
+        const analyzeButton = document.getElementById('analyze-button');
+        const buttonText = document.getElementById('button-text');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const errorMessage = document.getElementById('error-message');
+        const resultsList = document.getElementById('results-list');
+        const emptyState = document.getElementById('empty-state');
+        const totalCount = document.getElementById('total-count');
+        const fileStatus = document.getElementById('file-status');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressStatus = document.getElementById('progress-status');
+        const exportButton = document.getElementById('export-button');
+
+        // --- Event Listener for File Upload ---
+        fileInput.addEventListener('change', handleFileSelect);
+
+        /**
+         * Clears all old data and enables the analyze button if a file is selected.
+         */
+        function handleFileSelect(event) {
+            errorMessage.classList.add('hidden');
+            sentimentData = [];
+            unanalyzedTweets = [];
+            renderChart();
+            renderDataList();
+            progressContainer.classList.add('hidden');
+            exportButton.disabled = true;
+
+            const file = event.target.files[0];
+            if (file) {
+                fileStatus.textContent = `File loaded: ${file.name}. Ready to analyze.`;
+                fileStatus.classList.remove('hidden');
+                analyzeButton.disabled = false;
+            } else {
+                fileStatus.textContent = `No file selected.`;
+                analyzeButton.disabled = true;
+            }
+        }
+
+        /**
+         * Parses the CSV text content into an array of tweet strings.
+         * Assumes one tweet per line/row.
+         */
+        function parseCSV(csvText) {
+            // Split by line breaks, trim whitespace, and filter out empty lines
+            const lines = csvText.split(/\r\n|\n/).map(line => line.trim()).filter(line => line.length > 0);
+            
+            // Assuming the first line might be a header, skip it.
+            // If the first line looks like a header (e.g., "tweet", "text"), we skip it.
+            if (lines.length > 0 && (lines[0].toLowerCase() === 'tweet' || lines[0].toLowerCase() === 'text')) {
+                return lines.slice(1);
+            }
+            return lines;
+        }
+
+        /**
+         * Converts the dataset to CSV format and triggers a download.
+         */
+        function exportData() {
+            if (sentimentData.length === 0) {
+                errorMessage.textContent = 'Dataset is empty. Run the analysis first!';
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+            errorMessage.classList.add('hidden');
+
+            const headers = ["ID", "Sentiment", "Explanation", "Timestamp", "Tweet_Text"];
+            
+            const csvRows = sentimentData.map((item, index) => {
+                const escapeQuotes = (str) => str ? str.replace(/"/g, '""') : '';
+                
+                const tweetText = escapeQuotes(item.text.replace(/\n/g, ' '));
+                const explanation = escapeQuotes(item.explanation);
+                
+                return [
+                    index + 1,
+                    item.sentiment,
+                    `"${explanation}"`, 
+                    item.date.toISOString(),
+                    `"${tweetText}"` 
+                ].join(',');
+            });
+
+            const csvContent = [
+                headers.join(','),
+                ...csvRows
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `sentiment_analysis_results_${new Date().toISOString().substring(0, 10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            console.log(`Exported ${sentimentData.length} records.`);
+        }
+
+        // --- Core Batch Processing Logic ---
+
+        /**
+         * Reads the file and starts the analysis batch.
+         */
+        function startBatchAnalysis() {
+            const file = fileInput.files[0];
+            if (!file) {
+                errorMessage.textContent = 'Please select a CSV file first.';
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            setLoading(true, "Reading file...");
+            
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const csvText = e.target.result;
+                unanalyzedTweets = parseCSV(csvText);
+
+                if (unanalyzedTweets.length === 0) {
+                    errorMessage.textContent = 'File is empty or could not be parsed. Ensure it has one tweet per line.';
+                    errorMessage.classList.remove('hidden');
+                    setLoading(false);
+                    return;
+                }
+                
+                // Clear the analysis history before starting the new batch
+                sentimentData = []; 
+                renderChart();
+                renderDataList();
+
+                await analyzeBatch(unanalyzedTweets);
+                
+                // FIX: Ensure the final state is rendered after the batch is complete
+                renderChart();
+                renderDataList();
+                
+                setLoading(false);
+            };
+            
+            reader.onerror = () => {
+                errorMessage.textContent = 'Error reading the file.';
+                errorMessage.classList.remove('hidden');
+                setLoading(false);
+            };
+
+            reader.readAsText(file);
+        }
+
+        /**
+         * Iterates through the list of tweets, calling the API for each one.
+         */
+        async function analyzeBatch(tweets) {
+            const total = tweets.length;
+
+            for (let i = 0; i < total; i++) {
+                const tweetText = tweets[i];
+                const progress = Math.round(((i + 1) / total) * 100);
+                
+                // Update UI progress (This is fine to do on every iteration)
+                progressStatus.textContent = `Analyzing tweet ${i + 1} of ${total} (${progress}%)`;
+                progressBar.style.width = `${progress}%`;
+                
+                try {
+                    // Use the function pointer defined globally
+                    const result = await analysisFunction(tweetText);
+                    
+                    sentimentData.push({
+                        text: tweetText,
+                        sentiment: result.sentiment,
+                        explanation: result.explanation,
+                        date: new Date()
+                    });
+
+                    // Real-Time Update: Render UI changes immediately
+                    renderChart();
+                    renderDataList();
+
+                } catch (e) {
+                    // Log the error but continue to the next tweet
+                    console.error(`Skipping tweet ${i + 1} due to analysis error: ${e.message}`);
+                    // You might want to save a record of failed analyses here
+                }
+                
+                // Increased delay to ensure browser yields and repaints the DOM
+                await new Promise(resolve => setTimeout(resolve, 100)); 
+            }
+            
+            progressStatus.textContent = `Analysis Complete! ${sentimentData.length} tweets successfully analyzed.`;
+            exportButton.disabled = false;
+        }
+
+
+        // --- MOCK ANALYSIS FUNCTION (Uses no API key) ---
+        /**
+         * Provides mock sentiment data for testing purposes when an API key is not available.
+         */
+        async function fetchMockSentiment(tweetText) {
+             // Simulate analysis time
+             await new Promise(resolve => setTimeout(resolve, 50)); 
+             
+             const sentiments = ['Positive', 'Negative', 'Neutral'];
+             const randomSentiment = sentiments[Math.floor(Math.random() * sentiments.length)];
+             
+             let explanation;
+             switch (randomSentiment) {
+                 case 'Positive':
+                     explanation = "Mock analysis detected optimistic tone, likely due to keywords like 'love' or 'great'.";
+                     break;
+                 case 'Negative':
+                     explanation = "Mock analysis detected critical phrasing, possibly from terms like 'bad' or 'issue'.";
+                     break;
+                 case 'Neutral':
+                 default:
+                     explanation = "Mock analysis could not detect a strong emotional tone, often seen in factual statements.";
+                     break;
+             }
+             
+             return { sentiment: randomSentiment, explanation: explanation };
+        }
+        
+        
+        // --- LIVE ANALYSIS FUNCTION (Requires API key) ---
+        /**
+         * Handles the single API call for sentiment analysis. REQUIRES API KEY.
+         */
+        async function fetchSentiment(tweetText) {
+            if (!apiKey || tweetText.length < 5) {
+                // If there's no API key and the mock function isn't used, throw an error.
+                throw new Error("API Key is missing or tweet is too short. Cannot perform live analysis.");
+            }
+
+            const systemPrompt = "You are a professional social media sentiment analysis engine, specifically analyzing short-form posts like tweets. Analyze the user-provided text for its core emotional tone and overall sentiment. Your output MUST be one of the following classifications: 'Positive', 'Negative', or 'Neutral'. Provide a brief, one-sentence explanation for your choice, mentioning the social context or specific elements like hashtags or emojis. Always respond exclusively in the requested JSON format.";
+
+            const responseSchema = {
+                type: "OBJECT",
+                properties: {
+                    "sentiment": { "type": "STRING" },
+                    "explanation": { "type": "STRING" }
+                },
+                required: ["sentiment", "explanation"]
+            };
+
+            const payload = {
+                contents: [{ parts: [{ text: tweetText }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: responseSchema
+                }
+            };
+
+            const maxRetries = 3;
+            let result = null;
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(`${apiUrl}?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 && attempt < maxRetries - 1) {
+                            const delay = Math.pow(2, attempt) * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    result = await response.json();
+                    break;
+
+                } catch (error) {
+                    console.error(`API Call Error (Attempt ${attempt + 1}):`, error);
+                    // Re-throw on final attempt
+                    if (attempt === maxRetries - 1) throw new Error("Failed to connect to API after retries.");
+                }
+            }
+
+            const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!jsonText) throw new Error("Invalid response structure from model.");
+
+            const parsedData = JSON.parse(jsonText);
+            if (!parsedData.sentiment || !parsedData.explanation) throw new Error("Missing data in JSON response.");
+            
+            return parsedData;
+        }
+
+        // --- UI Rendering Functions ---
+
+        /**
+         * Renders the chart using Chart.js.
+         */
+        function renderChart() {
+            const ctx = document.getElementById('sentimentChart').getContext('2d');
+            
+            const counts = sentimentData.reduce((acc, item) => {
+                const sentiment = item.sentiment.toLowerCase();
+                acc[sentiment] = (acc[sentiment] || 0) + 1;
+                return acc;
+            }, { 'positive': 0, 'negative': 0, 'neutral': 0 });
+
+            const labels = ['Positive', 'Negative', 'Neutral'];
+            const data = [counts.positive, counts.negative, counts.neutral];
+            
+            // Updated Chart colors: Green for Positive, Red for Negative, Blue for Neutral
+            // Positive (Index 0) -> Green
+            // Negative (Index 1) -> Red
+            // Neutral (Index 2) -> Blue
+            const backgroundColors = ['#34d399', '#f43f5e', '#3b82f6'];
+
+            if (sentimentChartInstance) {
+                sentimentChartInstance.data.datasets[0].data = data;
+                sentimentChartInstance.update();
+            } else {
+                sentimentChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: backgroundColors,
+                            hoverOffset: 8, 
+                            borderColor: '#1a1a2e', // Border color matching body background
+                            borderWidth: 3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        aspectRatio: 1, 
+                        plugins: {
+                            legend: {
+                                position: 'bottom', 
+                                labels: {
+                                    font: {
+                                        size: 14,
+                                        weight: '600'
+                                    },
+                                    color: '#b0b0b0' // Lighter legend text for dark theme
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed !== null) {
+                                            label += context.parsed + ' (' + ((context.parsed / sentimentData.length) * 100).toFixed(1) + '%)';
+                                        }
+                                        return label;
+                                    }
+                                },
+                                titleColor: '#ffffff', // White tooltip title
+                                bodyColor: '#e0e0e0',  // Lighter tooltip body
+                                backgroundColor: 'rgba(0,0,0,0.8)', // Darker tooltip background
+                                borderColor: '#8e2de2', // Accent border for tooltip
+                                borderWidth: 1
+                            }
+                        },
+                        cutout: '70%', 
+                    }
+                });
+            }
+        }
+
+        /**
+         * Renders the list of all analyzed tweets.
+         */
+        function renderDataList() {
+            resultsList.innerHTML = '';
+            totalCount.textContent = sentimentData.length;
+            
+            if (sentimentData.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            // Show only the last 10 tweets to prevent excessive DOM elements
+            sentimentData.slice().reverse().slice(0, 10).forEach(item => { 
+                const sentiment = item.sentiment.toLowerCase();
+                let colorClass, icon;
+
+                switch (sentiment) {
+                    case 'positive':
+                        colorClass = 'bg-green-900/30 border-green-600 text-green-300'; icon = '✨'; break;
+                    case 'negative':
+                        colorClass = 'bg-red-900/30 border-red-600 text-red-300'; icon = '💔'; break;
+                    case 'neutral':
+                    default:
+                        colorClass = 'bg-blue-900/30 border-blue-600 text-blue-300'; icon = '💬'; break;
+                }
+
+                const listItem = document.createElement('div');
+                listItem.className = `p-4 rounded-xl shadow-md border-l-4 ${colorClass}`;
+                
+                const timeString = item.date instanceof Date && !isNaN(item.date) ? item.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A';
+
+                listItem.innerHTML = `
+                    <p class="text-base font-semibold flex justify-between items-center mb-1">
+                        <span class="font-bold">${icon} ${item.sentiment}</span>
+                        <span class="text-xs text-gray-400">${timeString}</span>
+                    </p>
+                    <p class="text-sm text-gray-300 italic mb-2">"${item.text.substring(0, 100)}${item.text.length > 100 ? '...' : ''}"</p>
+                    <p class="text-xs text-gray-400"><strong>Reason:</strong> ${item.explanation}</p>
+                `;
+                resultsList.appendChild(listItem);
+            });
+            
+            if (sentimentData.length > 10) {
+                 const note = document.createElement('p');
+                 note.className = 'text-center text-sm text-gray-500 pt-3 border-t border-gray-700 mt-4';
+                 note.textContent = `... showing the last 10 of ${sentimentData.length} analyzed tweets. Export the CSV for the full list.`;
+                 resultsList.appendChild(note);
+            }
+        }
+
+        /**
+         * Manages the loading state and progress bar.
+         */
+        function setLoading(isLoading, statusText = 'Processing...') {
+            analyzeButton.disabled = isLoading;
+            fileInput.disabled = isLoading;
+            exportButton.disabled = isLoading && sentimentData.length === 0; // Disable export only if nothing to export
+            buttonText.textContent = isLoading ? statusText : 'Analyze Full Dataset';
+            loadingSpinner.classList.toggle('hidden', !isLoading);
+            progressContainer.classList.toggle('hidden', !isLoading && sentimentData.length === 0);
+            progressStatus.textContent = statusText;
+            
+            if (!isLoading) {
+                 progressBar.style.width = `100%`;
+                 progressStatus.textContent = `Analysis finished! ${sentimentData.length} records processed.`;
+            } else {
+                 progressBar.style.width = `0%`;
+            }
+        }
+
+        // Initialize the UI on load
+        window.onload = () => {
+             renderChart();
+             renderDataList();
+        };
+
+    </script>
+</body>
+</html>
